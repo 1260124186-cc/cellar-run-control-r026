@@ -53,3 +53,26 @@ type ObservationInput struct {
 type FinishCleaningInput struct {
 	ExpectedVersion *int64
 }
+
+// RecordCleaningCheckInput records the execution result of one mandatory
+// cleaning checklist item. The expected version is the current vessel version.
+type RecordCleaningCheckInput struct {
+	ExpectedVersion *int64
+	Sequence        int
+	Result          domain.CheckResult
+	Note            string
+}
+
+// VesselDetail is the vessel view with the shared cleaning record history for
+// the vessel's active and completed cleanings.
+type VesselDetail struct {
+	domain.Vessel
+	CleaningRecords []domain.CleaningRecord `json:"cleaning_records"`
+}
+
+// RunDetail is the run view with the same cleaning records exposed by the
+// vessel detail, so both surfaces show one shared record per cleaning.
+type RunDetail struct {
+	domain.FermentationRun
+	CleaningRecords []domain.CleaningRecord `json:"cleaning_records"`
+}

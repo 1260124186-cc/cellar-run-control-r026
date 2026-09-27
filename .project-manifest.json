@@ -113,6 +113,26 @@
         "domain",
         "storage"
       ]
+    },
+    {
+      "id": "cleaning-release",
+      "name": "Record mandatory cleaning checks and release the vessel",
+      "entry": "POST /v1/cleaning-records/{id}/checks",
+      "steps": [
+        "complete a run and snapshot the mandatory cleaning checklist",
+        "record an execution result for every required check",
+        "release the vessel only once all checks are recorded and the run stays terminal",
+        "read the same completed record from vessel and run details and keep history"
+      ],
+      "success": "returns a completed cleaning record with a completion time and an available vessel",
+      "failure": "returns a stable incomplete-checks, duplicate, stale-version, or run-state conflict",
+      "verification": "the check issues real HTTP requests and verifies early, repeated, and stale submissions",
+      "module_ids": [
+        "httpapi",
+        "service",
+        "domain",
+        "storage"
+      ]
     }
   ]
 }

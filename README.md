@@ -94,6 +94,20 @@ Run workflow:
 - `POST /v1/runs/{id}/complete`
 - `POST /v1/runs/{id}/abort`
 
+Cleaning workflow:
+
+- `GET /v1/cleaning-records/{id}`
+- `POST /v1/cleaning-records/{id}/checks`
+
+Completing a run (or aborting a started run) creates an in-progress cleaning
+record with a mandatory checklist. `GET /v1/vessels/{id}` and
+`GET /v1/runs/{id}` both expose the shared records under `cleaning_records`.
+Each required check accepts a `sequence`, a `result` of `passed` or `failed`,
+and an optional `note`, guarded by the current vessel version in
+`X-Expected-Version`. The vessel is released only after every mandatory check
+has a recorded result and the associated run is still terminal; the completed
+record (including its completion time) is retained as history.
+
 Writes accept an optional `X-Expected-Version` header. Errors use a stable
 shape:
 
@@ -115,6 +129,7 @@ Run each production workflow check separately:
 go run ./cmd/fermentctl check formula-approval
 go run ./cmd/fermentctl check vessel-run-lifecycle
 go run ./cmd/fermentctl check observations-completion
+go run ./cmd/fermentctl check cleaning-release
 ```
 
 Each check creates a temporary snapshot directory, starts the real HTTP

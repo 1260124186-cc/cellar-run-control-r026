@@ -35,6 +35,39 @@ type pairView struct {
 	Vessel vesselView `json:"vessel"`
 }
 
+type cleaningCheckView struct {
+	Sequence   int                 `json:"sequence"`
+	Label      string              `json:"label"`
+	Required   bool                `json:"required"`
+	Result     *domain.CheckResult `json:"result"`
+	RecordedAt *time.Time          `json:"recorded_at"`
+}
+
+type cleaningRecordView struct {
+	ID          string               `json:"id"`
+	VesselID    string               `json:"vessel_id"`
+	RunID       string               `json:"run_id"`
+	State       domain.CleaningState `json:"state"`
+	Checks      []cleaningCheckView  `json:"checks"`
+	StartedAt   time.Time            `json:"started_at"`
+	CompletedAt *time.Time           `json:"completed_at"`
+}
+
+type vesselDetailView struct {
+	vesselView
+	CleaningRecords []cleaningRecordView `json:"cleaning_records"`
+}
+
+type runDetailView struct {
+	runView
+	CleaningRecords []cleaningRecordView `json:"cleaning_records"`
+}
+
+type cleaningCheckPairView struct {
+	CleaningRecord cleaningRecordView `json:"cleaning_record"`
+	Vessel         vesselView         `json:"vessel"`
+}
+
 func createFormulaPayload(name string) map[string]any {
 	return map[string]any{
 		"name":                    name,

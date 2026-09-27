@@ -3,25 +3,27 @@ package domain
 import "time"
 
 type Snapshot struct {
-	Revision    int64                      `json:"revision"`
-	UpdatedAt   time.Time                  `json:"updated_at"`
-	Formulas    map[string]Formula         `json:"formulas"`
-	Vessels     map[string]Vessel          `json:"vessels"`
-	Runs        map[string]FermentationRun `json:"runs"`
-	NameIndex   map[string]string          `json:"formula_name_index"`
-	VesselIndex map[string]string          `json:"vessel_code_index"`
-	RunIndex    map[string]string          `json:"run_code_index"`
+	Revision        int64                      `json:"revision"`
+	UpdatedAt       time.Time                  `json:"updated_at"`
+	Formulas        map[string]Formula         `json:"formulas"`
+	Vessels         map[string]Vessel          `json:"vessels"`
+	Runs            map[string]FermentationRun `json:"runs"`
+	CleaningRecords map[string]CleaningRecord  `json:"cleaning_records"`
+	NameIndex       map[string]string          `json:"formula_name_index"`
+	VesselIndex     map[string]string          `json:"vessel_code_index"`
+	RunIndex        map[string]string          `json:"run_code_index"`
 }
 
 func EmptySnapshot() Snapshot {
 	return Snapshot{
-		Revision:    0,
-		Formulas:    map[string]Formula{},
-		Vessels:     map[string]Vessel{},
-		Runs:        map[string]FermentationRun{},
-		NameIndex:   map[string]string{},
-		VesselIndex: map[string]string{},
-		RunIndex:    map[string]string{},
+		Revision:        0,
+		Formulas:        map[string]Formula{},
+		Vessels:         map[string]Vessel{},
+		Runs:            map[string]FermentationRun{},
+		CleaningRecords: map[string]CleaningRecord{},
+		NameIndex:       map[string]string{},
+		VesselIndex:     map[string]string{},
+		RunIndex:        map[string]string{},
 	}
 }
 
@@ -42,6 +44,9 @@ func (s Snapshot) Clone() Snapshot {
 	}
 	for key, value := range s.Runs {
 		cloned.Runs[key] = value.Clone()
+	}
+	for key, value := range s.CleaningRecords {
+		cloned.CleaningRecords[key] = value.Clone()
 	}
 	for key, value := range s.NameIndex {
 		cloned.NameIndex[key] = value
@@ -64,4 +69,15 @@ func withActiveRun(v Vessel, runID *string) Vessel {
 	copied := *runID
 	value.ActiveRunID = &copied
 	return value
+}
+
+// ActiveCleaningForRun returns the in-progress cleaning record bound to a run,
+// if one exists. Only one cleaning can be active per vessel/run at a time.
+func (s Snapshot) ActiveCleaningForRun(runID string) (CleaningRecord, bool) {
+	for _, record := range s.CleaningRecords {
+		if record.RunID == runID && record.State == CleaningInProgress {
+			return record.Clone(), true
+		}
+	}
+	return CleaningRecord{}, false
 }

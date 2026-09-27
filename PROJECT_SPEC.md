@@ -58,8 +58,42 @@ States are `available`, `reserved`, `in_use`, `cleaning`, and `retired`.
 - Completion moves an in-use vessel to cleaning.
 - Cleaning can be finished only when the associated run is complete or
   aborted.
-- Finishing cleaning releases the vessel to available.
+- Entering cleaning creates an in-progress cleaning record with a mandatory
+  checklist snapshot shared by the vessel and the run.
+- Each mandatory check must carry an execution result (`passed` or `failed`)
+  before the vessel can be released. A failed check still counts as recorded;
+  releasing requires results for all items, not all passes.
+- Finishing cleaning is accepted only when every mandatory check is recorded,
+  the cleaning record is still in progress, and the associated run is still
+  terminal. It snapshots the completion time, completes the record, and
+  releases the vessel to available.
+- Repeated check submissions, stale expected versions, and a reopened
+  associated run fail without partial writes. Completed records are immutable.
+- Cleaning records accumulate as history. A later cleaning creates a new
+  record and never overwrites a completed one.
 - A vessel with an active run cannot be retired or directly reserved.
+
+### CleaningRecord
+
+A cleaning record contains an identifier, vessel identifier, associated run
+identifier, lifecycle state, an ordered mandatory checklist, a start time, a
+completion time snapshot, and a version.
+
+States are `in_progress` and `completed`.
+
+- Exactly one in-progress record exists per vessel/run while the vessel is
+  cleaning.
+- The checklist is snapshotted when cleaning starts: visual inspection,
+  caustic wash, sanitizing rinse, and drain/dryness verification.
+- Each check stores its execution result, an optional note, and the recording
+  time once and only once; repeating a check fails.
+- A check submission uses the current vessel version in
+  `X-Expected-Version`; a stale version fails as a revision conflict.
+- Completion snapshots the completion time, requires every mandatory check to
+  be recorded, and is allowed only while the associated run is terminal.
+- Completed records are immutable and remain visible from vessel detail and
+  run detail. Subsequent cleanings append new records instead of replacing
+  history.
 
 ### FermentationRun
 
@@ -150,6 +184,28 @@ transitions return stable failures without changing persisted state.
 This path crosses HTTP protocol handling, application orchestration, numeric
 domain rules, and snapshot storage.
 
+### 4. Cleaning Checklist And Release
+
+Public entry points are:
+
+- `POST /v1/runs/{id}/complete` (or aborting a started run)
+- `POST /v1/cleaning-records/{id}/checks`
+- `POST /v1/vessels/{id}/finish-cleaning`
+- `GET /v1/vessels/{id}`
+- `GET /v1/runs/{id}`
+- `GET /v1/cleaning-records/{id}`
+
+The client completes a run, reads the in-progress cleaning record with its
+mandatory checklist from the vessel and run details, records an execution
+result for every required check, and only then releases the vessel. Finishing
+before all checks are recorded, repeating a check, submitting a stale
+version, or finishing twice returns stable failures without changing state.
+The completion time is snapshotted on success, and a later cleaning appends a
+new record while the completed history stays visible on both detail surfaces.
+
+This path crosses HTTP protocol handling, application orchestration, domain
+state guards, shared snapshot storage, and resource lifecycle.
+
 ## Modules
 
 - `cmd/fermentctl`: executable entry point for the HTTP service and bounded
@@ -217,6 +273,7 @@ behavior, and exit without external services:
 - `go run ./cmd/fermentctl check formula-approval`
 - `go run ./cmd/fermentctl check vessel-run-lifecycle`
 - `go run ./cmd/fermentctl check observations-completion`
+- `go run ./cmd/fermentctl check cleaning-release`
 
 ## Scope Limits
 

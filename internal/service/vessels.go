@@ -40,18 +40,21 @@ func (s *Service) CreateVessel(input CreateVesselInput) (domain.Vessel, error) {
 	return vessel, nil
 }
 
-func (s *Service) GetVessel(id string) (domain.Vessel, error) {
-	var found domain.Vessel
+func (s *Service) GetVessel(id string) (VesselDetail, error) {
+	var found VesselDetail
 	err := s.store.View(func(snapshot domain.Snapshot) error {
 		vessel, ok := snapshot.Vessels[id]
 		if !ok {
 			return domain.NewError(domain.CodeVesselNotFound, "vessel was not found")
 		}
-		found = vessel
+		found = VesselDetail{
+			Vessel:          vessel,
+			CleaningRecords: cleaningRecordsForVessel(snapshot, id),
+		}
 		return nil
 	})
 	if err != nil {
-		return domain.Vessel{}, err
+		return VesselDetail{}, err
 	}
 	return found, nil
 }
@@ -75,45 +78,6 @@ func (s *Service) ListVessels() ([]domain.Vessel, error) {
 		return vessels[i].Code < vessels[j].Code
 	})
 	return vessels, nil
-}
-
-func (s *Service) FinishCleaning(
-	id string,
-	input FinishCleaningInput,
-) (domain.Vessel, error) {
-	var updated domain.Vessel
-	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
-		vessel, ok := snapshot.Vessels[id]
-		if !ok {
-			return domain.NewError(domain.CodeVesselNotFound, "vessel was not found")
-		}
-		if err := s.checkExpected(vessel.Version, input.ExpectedVersion); err != nil {
-			return err
-		}
-		if vessel.ActiveRunID == nil {
-			return domain.NewError(domain.CodeVesselState,
-				"cleaning vessel has no associated run")
-		}
-		run, ok := snapshot.Runs[*vessel.ActiveRunID]
-		if !ok {
-			return domain.NewError(domain.CodeRunNotFound,
-				"associated run was not found")
-		}
-		if run.State != domain.RunCompleted && run.State != domain.RunAborted {
-			return domain.NewError(domain.CodeRunState,
-				"associated run is still open")
-		}
-		if err := vessel.FinishCleaning(s.clock.Now()); err != nil {
-			return err
-		}
-		snapshot.Vessels[id] = vessel
-		updated = vessel
-		return nil
-	})
-	if err != nil {
-		return domain.Vessel{}, err
-	}
-	return updated, nil
 }
 
 func (s *Service) RetireVessel(id string, input VersionInput) (domain.Vessel, error) {

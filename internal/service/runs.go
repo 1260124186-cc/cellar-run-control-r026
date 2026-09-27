@@ -162,7 +162,7 @@ func (s *Service) AbortRun(
 				return domain.NewError(domain.CodeVesselNotFound, "vessel was not found")
 			}
 			if hadStarted {
-				if err := vessel.StartCleaning(run.ID, s.clock.Now()); err != nil {
+				if _, err := s.beginCleaning(snapshot, &vessel, run.ID); err != nil {
 					return err
 				}
 			} else if err := vessel.ReleaseReservation(run.ID, s.clock.Now()); err != nil {
@@ -181,18 +181,21 @@ func (s *Service) AbortRun(
 	return updatedRun, updatedVessel, nil
 }
 
-func (s *Service) GetRun(id string) (domain.FermentationRun, error) {
-	var found domain.FermentationRun
+func (s *Service) GetRun(id string) (RunDetail, error) {
+	var found RunDetail
 	err := s.store.View(func(snapshot domain.Snapshot) error {
 		run, ok := snapshot.Runs[id]
 		if !ok {
 			return domain.NewError(domain.CodeRunNotFound, "run was not found")
 		}
-		found = run.Clone()
+		found = RunDetail{
+			FermentationRun: run.Clone(),
+			CleaningRecords: cleaningRecordsForRun(snapshot, id),
+		}
 		return nil
 	})
 	if err != nil {
-		return domain.FermentationRun{}, err
+		return RunDetail{}, err
 	}
 	return found, nil
 }
