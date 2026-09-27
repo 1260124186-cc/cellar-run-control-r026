@@ -36,6 +36,16 @@ func NameKey(value string) string {
 	return builder.String()
 }
 
+// toFold trims, collapses internal whitespace, and case-folds an identifier-like
+// value without removing separators. It is used to match submitted keys.
+func toFold(value string) string {
+	var builder strings.Builder
+	for _, r := range strings.TrimSpace(value) {
+		builder.WriteRune(unicode.ToLower(r))
+	}
+	return builder.String()
+}
+
 func ValidateIdentifier(value, field string) error {
 	if !identifierPattern.MatchString(value) {
 		return FieldError(CodeInvalidInput, field,

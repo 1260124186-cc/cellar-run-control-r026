@@ -40,6 +40,14 @@ func Run(name string) error {
 		if err := observationsCompletion(api); err != nil {
 			return err
 		}
+	case "cleaning-release":
+		if err := cleaningRelease(api); err != nil {
+			return err
+		}
+	case "abort-cleaning-terminal":
+		if err := abortCleaningTerminal(api); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unknown workflow check %q", name)
 	}

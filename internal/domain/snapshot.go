@@ -8,6 +8,7 @@ type Snapshot struct {
 	Formulas    map[string]Formula         `json:"formulas"`
 	Vessels     map[string]Vessel          `json:"vessels"`
 	Runs        map[string]FermentationRun `json:"runs"`
+	Cleanings   map[string]CleaningRecord  `json:"cleanings"`
 	NameIndex   map[string]string          `json:"formula_name_index"`
 	VesselIndex map[string]string          `json:"vessel_code_index"`
 	RunIndex    map[string]string          `json:"run_code_index"`
@@ -19,6 +20,7 @@ func EmptySnapshot() Snapshot {
 		Formulas:    map[string]Formula{},
 		Vessels:     map[string]Vessel{},
 		Runs:        map[string]FermentationRun{},
+		Cleanings:   map[string]CleaningRecord{},
 		NameIndex:   map[string]string{},
 		VesselIndex: map[string]string{},
 		RunIndex:    map[string]string{},
@@ -36,12 +38,20 @@ func (s Snapshot) Clone() Snapshot {
 		cloned.Vessels[key] = value
 		if value.ActiveRunID != nil {
 			runID := *value.ActiveRunID
-			cloned.Vessels[key] = value
 			cloned.Vessels[key] = withActiveRun(value, &runID)
+		}
+		if value.CurrentCleaningID != nil {
+			cleaningID := *value.CurrentCleaningID
+			vessel := cloned.Vessels[key]
+			vessel.CurrentCleaningID = &cleaningID
+			cloned.Vessels[key] = vessel
 		}
 	}
 	for key, value := range s.Runs {
 		cloned.Runs[key] = value.Clone()
+	}
+	for key, value := range s.Cleanings {
+		cloned.Cleanings[key] = value.Clone()
 	}
 	for key, value := range s.NameIndex {
 		cloned.NameIndex[key] = value

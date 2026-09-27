@@ -40,18 +40,18 @@ func (s *Service) CreateVessel(input CreateVesselInput) (domain.Vessel, error) {
 	return vessel, nil
 }
 
-func (s *Service) GetVessel(id string) (domain.Vessel, error) {
-	var found domain.Vessel
+func (s *Service) GetVessel(id string) (VesselDetail, error) {
+	var found VesselDetail
 	err := s.store.View(func(snapshot domain.Snapshot) error {
 		vessel, ok := snapshot.Vessels[id]
 		if !ok {
 			return domain.NewError(domain.CodeVesselNotFound, "vessel was not found")
 		}
-		found = vessel
+		found = s.buildVesselDetail(snapshot, vessel)
 		return nil
 	})
 	if err != nil {
-		return domain.Vessel{}, err
+		return VesselDetail{}, err
 	}
 	return found, nil
 }
@@ -80,38 +80,59 @@ func (s *Service) ListVessels() ([]domain.Vessel, error) {
 func (s *Service) FinishCleaning(
 	id string,
 	input FinishCleaningInput,
-) (domain.Vessel, error) {
-	var updated domain.Vessel
+) (VesselDetail, error) {
+	var updated VesselDetail
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
 		vessel, ok := snapshot.Vessels[id]
 		if !ok {
 			return domain.NewError(domain.CodeVesselNotFound, "vessel was not found")
 		}
-		if err := s.checkExpected(vessel.Version, input.ExpectedVersion); err != nil {
-			return err
-		}
-		if vessel.ActiveRunID == nil {
+		if vessel.State != domain.VesselCleaning {
 			return domain.NewError(domain.CodeVesselState,
-				"cleaning vessel has no associated run")
+				"vessel is not waiting for cleaning")
 		}
-		run, ok := snapshot.Runs[*vessel.ActiveRunID]
+		if vessel.ActiveRunID == nil || vessel.CurrentCleaningID == nil {
+			return domain.NewError(domain.CodeVesselState,
+				"cleaning vessel has no associated run or cleaning record")
+		}
+		cleaning, ok := snapshot.Cleanings[*vessel.CurrentCleaningID]
 		if !ok {
-			return domain.NewError(domain.CodeRunNotFound,
-				"associated run was not found")
+			return domain.NewError(domain.CodeCleaningNotFound,
+				"current cleaning record was not found")
 		}
-		if run.State != domain.RunCompleted && run.State != domain.RunAborted {
-			return domain.NewError(domain.CodeRunState,
-				"associated run is still open")
-		}
-		if err := vessel.FinishCleaning(s.clock.Now()); err != nil {
+		// Optimistic concurrency is guarded by the cleaning record version:
+		// concurrent checklist writes must not be released on a stale read.
+		if err := s.checkExpected(cleaning.Version, input.ExpectedVersion); err != nil {
 			return err
 		}
+		if cleaning.VesselID != vessel.ID {
+			return domain.NewError(domain.CodeCleaningState,
+				"cleaning record belongs to a different vessel")
+		}
+		run, ok := snapshot.Runs[cleaning.RunID]
+		if !ok {
+			return domain.NewError(domain.CodeRunNotFound, "associated run was not found")
+		}
+		if cleaning.RunID != *vessel.ActiveRunID {
+			return domain.NewError(domain.CodeRunState,
+				"cleaning record belongs to a different run")
+		}
+		now := s.clock.Now()
+		// Freeze the completion snapshot only while the run is still terminal.
+		// If the run was reopened, this fails and the vessel stays in cleaning.
+		if err := cleaning.Complete(run.State, now); err != nil {
+			return err
+		}
+		if err := vessel.FinishCleaning(now); err != nil {
+			return err
+		}
+		snapshot.Cleanings[cleaning.ID] = cleaning.Clone()
 		snapshot.Vessels[id] = vessel
-		updated = vessel
+		updated = s.buildVesselDetail(*snapshot, vessel)
 		return nil
 	})
 	if err != nil {
-		return domain.Vessel{}, err
+		return VesselDetail{}, err
 	}
 	return updated, nil
 }

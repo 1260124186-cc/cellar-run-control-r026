@@ -79,6 +79,7 @@ Vessel workflow:
 - `POST /v1/vessels`
 - `GET /v1/vessels`
 - `GET /v1/vessels/{id}`
+- `POST /v1/vessels/{id}/cleaning-checks`
 - `POST /v1/vessels/{id}/finish-cleaning`
 - `POST /v1/vessels/{id}/retire`
 
@@ -94,7 +95,8 @@ Run workflow:
 - `POST /v1/runs/{id}/complete`
 - `POST /v1/runs/{id}/abort`
 
-Writes accept an optional `X-Expected-Version` header. Errors use a stable
+Writes accept an optional `X-Expected-Version` header. For cleaning check and
+release writes the version is the cleaning record version. Errors use a stable
 shape:
 
 ```json
@@ -107,6 +109,43 @@ shape:
 }
 ```
 
+### Cleaning Checklist
+
+Every time a vessel enters cleaning (on run completion, or when a started run is
+aborted) the service creates an immutable cleaning record with a mandatory
+checklist. A cleaning vessel cannot return to `available` until:
+
+1. every mandatory checklist item has an executed result (`passed` or `failed`);
+2. the associated run is still in a terminal state (`completed` or `aborted`).
+
+Operators record results in batches:
+
+```
+POST /v1/vessels/{id}/cleaning-checks
+{
+  "results": [
+    {"check_key": "visual-inspection", "passed": true},
+    {"check_key": "sanitizer-rinse", "passed": true},
+    {"check_key": "valve-gasket", "passed": false, "note": "gasket replaced"}
+  ]
+}
+```
+
+The mandatory keys are `visual-inspection`, `sanitizer-rinse`, and
+`valve-gasket`. Unknown keys, duplicate keys, and repeating an already recorded
+item are rejected without partial writes. A stale `X-Expected-Version` is
+rejected with `revision_conflict`.
+
+`POST /v1/vessels/{id}/finish-cleaning` freezes a completion snapshot (item
+counts, the terminal run state, and the completion time) and only then releases
+the vessel. Repeating the release, submitting checks after release, or
+finishing while the run is no longer terminal all fail.
+
+`GET /v1/vessels/{id}` returns `current_cleaning` while cleaning and an append-
+only `cleaning_history` of completed records. `GET /v1/runs/{id}` returns the
+same cleaning record under `cleaning`; later cleaning cycles never overwrite a
+finished record.
+
 ## Workflow Checks
 
 Run each production workflow check separately:
@@ -115,6 +154,8 @@ Run each production workflow check separately:
 go run ./cmd/fermentctl check formula-approval
 go run ./cmd/fermentctl check vessel-run-lifecycle
 go run ./cmd/fermentctl check observations-completion
+go run ./cmd/fermentctl check cleaning-release
+go run ./cmd/fermentctl check abort-cleaning-terminal
 ```
 
 Each check creates a temporary snapshot directory, starts the real HTTP

@@ -89,9 +89,15 @@ func (s *Service) CompleteRun(
 		if !ok {
 			return domain.NewError(domain.CodeVesselNotFound, "vessel was not found")
 		}
-		if err := vessel.StartCleaning(run.ID, s.clock.Now()); err != nil {
+		now := s.clock.Now()
+		if err := vessel.StartCleaning(run.ID, now); err != nil {
 			return err
 		}
+		cleaningID, err := s.startCleaning(snapshot, &vessel, run.ID, now)
+		if err != nil {
+			return err
+		}
+		run.CleaningID = &cleaningID
 		snapshot.Runs[id] = run.Clone()
 		snapshot.Vessels[vessel.ID] = vessel
 		updatedRun = run.Clone()

@@ -25,6 +25,7 @@ type FermentationRun struct {
 	EndedAt        *time.Time           `json:"ended_at,omitempty"`
 	Observations   []GravityObservation `json:"observations"`
 	Metrics        *RunMetrics          `json:"metrics,omitempty"`
+	CleaningID     *string              `json:"cleaning_id,omitempty"`
 	Version        int64                `json:"version"`
 	CreatedAt      time.Time            `json:"created_at"`
 	UpdatedAt      time.Time            `json:"updated_at"`
@@ -48,6 +49,10 @@ func (r FermentationRun) Clone() FermentationRun {
 	if r.Metrics != nil {
 		value := *r.Metrics
 		cloned.Metrics = &value
+	}
+	if r.CleaningID != nil {
+		value := *r.CleaningID
+		cloned.CleaningID = &value
 	}
 	return cloned
 }

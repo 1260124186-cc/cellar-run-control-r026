@@ -13,14 +13,15 @@ const (
 )
 
 type Vessel struct {
-	ID          string      `json:"id"`
-	Code        string      `json:"code"`
-	CapacityL   float64     `json:"capacity_liters"`
-	State       VesselState `json:"state"`
-	ActiveRunID *string     `json:"active_run_id,omitempty"`
-	Version     int64       `json:"version"`
-	CreatedAt   time.Time   `json:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at"`
+	ID                string      `json:"id"`
+	Code              string      `json:"code"`
+	CapacityL         float64     `json:"capacity_liters"`
+	State             VesselState `json:"state"`
+	ActiveRunID       *string     `json:"active_run_id,omitempty"`
+	CurrentCleaningID *string     `json:"current_cleaning_id,omitempty"`
+	Version           int64       `json:"version"`
+	CreatedAt         time.Time   `json:"created_at"`
+	UpdatedAt         time.Time   `json:"updated_at"`
 }
 
 func (v Vessel) Validate() error {
@@ -73,6 +74,7 @@ func (v *Vessel) FinishCleaning(now time.Time) error {
 	}
 	v.State = VesselAvailable
 	v.ActiveRunID = nil
+	v.CurrentCleaningID = nil
 	v.UpdatedAt = now.UTC()
 	v.Version++
 	return nil

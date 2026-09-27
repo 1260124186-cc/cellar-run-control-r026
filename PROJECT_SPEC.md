@@ -56,16 +56,46 @@ States are `available`, `reserved`, `in_use`, `cleaning`, and `retired`.
 - Only an available vessel can be reserved.
 - A reserved or in-use vessel must identify exactly one active run.
 - Completion moves an in-use vessel to cleaning.
-- Cleaning can be finished only when the associated run is complete or
-  aborted.
-- Finishing cleaning releases the vessel to available.
+- Every entry into cleaning appends a new cleaning record with a mandatory
+  checklist; previous completed records are never overwritten.
+- Cleaning can be finished only when every mandatory checklist item has an
+  executed result and the associated run is still complete or aborted.
+- Finishing cleaning freezes a completion snapshot and releases the vessel to
+  available, clearing the active run and current cleaning links.
 - A vessel with an active run cannot be retired or directly reserved.
+
+### CleaningRecord
+
+A cleaning record contains an identifier, vessel identifier, associated run
+identifier, per-vessel sequence number, state, the mandatory checklist with an
+executed result per item, an immutable completion snapshot, version, and
+timestamps.
+
+States are `open` and `complete`.
+
+- Entering cleaning (run completion, or aborting a started run) creates one
+  open record per cycle and links it from both the vessel and the run.
+- The mandatory checklist is fixed: `visual-inspection`, `sanitizer-rinse`, and
+  `valve-gasket`. All start pending.
+- Results are submitted in batches. Each item can be recorded exactly once with
+  `passed` or `failed`; unknown keys, duplicate keys in a batch, and repeating a
+  recorded item fail without partial writes.
+- The release precondition is that every item has been recorded; a failed item
+  is a recorded result and is preserved in the snapshot.
+- Completion snapshots the item counts, the terminal run state, and the
+  completion time, then marks the record complete.
+- Releasing twice, recording checks after release, using a stale cleaning
+  version, or finishing while the associated run has been reopened all fail.
+- The vessel detail shows the open record as `current_cleaning` and completed
+  records as an append-only `cleaning_history`; the run detail shows the same
+  record under `cleaning`.
 
 ### FermentationRun
 
 A run contains an identifier, unique run code, an approved formula identifier,
 an optional vessel identifier, planned volume, notes, lifecycle state,
-timetable, ordered observations, final metrics, version, and timestamps.
+timetable, ordered observations, final metrics, an optional cleaning record
+identifier, version, and timestamps.
 
 States are `planned`, `reserved`, `fermenting`, `conditioning`, `completed`,
 and `aborted`.
@@ -133,22 +163,28 @@ produce stable failures without changing vessel or run state.
 This path crosses HTTP protocol handling, application orchestration, domain
 rules, storage coordination, and resource lifecycle.
 
-### 3. Observations And Completion
+### 3. Observations, Completion, And Cleaning Release
 
 Public entry points are:
 
 - `POST /v1/runs/{id}/observations`
 - `POST /v1/runs/{id}/conditioning`
 - `POST /v1/runs/{id}/complete`
+- `POST /v1/vessels/{id}/cleaning-checks`
+- `POST /v1/vessels/{id}/finish-cleaning`
 - `GET /v1/runs/{id}`
+- `GET /v1/vessels/{id}`
 
 The client appends three ordered observations, starts conditioning, completes
-the run, and reads the calculated result. Non-monotonic times, rising gravity,
-out-of-range values, excessive sequences, incomplete data, and repeated
-transitions return stable failures without changing persisted state.
+the run (which starts cleaning), records every mandatory cleaning checklist
+item, and releases the vessel. Releasing before all items are recorded, stale
+cleaning versions, duplicate or unknown checklist items, and repeating a
+completed cleaning all return stable failures without changing persisted state.
+The vessel and run details expose the same completed cleaning snapshot, and a
+later cleaning cycle preserves the earlier history.
 
 This path crosses HTTP protocol handling, application orchestration, numeric
-domain rules, and snapshot storage.
+domain rules, snapshot storage, and resource lifecycle.
 
 ## Modules
 
@@ -210,13 +246,15 @@ task owns systematic tests for validation boundaries, state transitions,
 numeric calculations, stale revisions, storage failures, and concurrent
 reservation attempts.
 
-The current build command is `go build ./...`. Three bounded production checks
+The current build command is `go build ./...`. Five bounded production checks
 start the real HTTP handler, issue real JSON requests, check success and failure
 behavior, and exit without external services:
 
 - `go run ./cmd/fermentctl check formula-approval`
 - `go run ./cmd/fermentctl check vessel-run-lifecycle`
 - `go run ./cmd/fermentctl check observations-completion`
+- `go run ./cmd/fermentctl check cleaning-release`
+- `go run ./cmd/fermentctl check abort-cleaning-terminal`
 
 ## Scope Limits
 

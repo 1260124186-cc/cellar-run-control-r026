@@ -15,10 +15,43 @@ type formulaView struct {
 }
 
 type vesselView struct {
-	ID          string             `json:"id"`
-	State       domain.VesselState `json:"state"`
-	Version     int64              `json:"version"`
-	ActiveRunID *string            `json:"active_run_id"`
+	ID                string             `json:"id"`
+	State             domain.VesselState `json:"state"`
+	Version           int64              `json:"version"`
+	ActiveRunID       *string            `json:"active_run_id"`
+	CurrentCleaningID *string            `json:"current_cleaning_id"`
+}
+
+type cleaningView struct {
+	ID         string               `json:"id"`
+	VesselID   string               `json:"vessel_id"`
+	RunID      string               `json:"run_id"`
+	Number     int                  `json:"number"`
+	State      domain.CleaningState `json:"state"`
+	Checks     []checkView          `json:"checks"`
+	Completion *completionView      `json:"completion"`
+	Version    int64                `json:"version"`
+}
+
+type checkView struct {
+	Key   string            `json:"key"`
+	State domain.CheckState `json:"state"`
+	Note  string            `json:"note"`
+}
+
+type completionView struct {
+	ChecksTotal    int             `json:"checks_total"`
+	ChecksRecorded int             `json:"checks_recorded"`
+	ChecksPassed   int             `json:"checks_passed"`
+	ChecksFailed   int             `json:"checks_failed"`
+	RunState       domain.RunState `json:"run_state"`
+	CompletedAt    time.Time       `json:"completed_at"`
+}
+
+type vesselDetailView struct {
+	vesselView
+	CurrentCleaning *cleaningView  `json:"current_cleaning"`
+	CleaningHistory []cleaningView `json:"cleaning_history"`
 }
 
 type runView struct {
@@ -26,8 +59,14 @@ type runView struct {
 	State        domain.RunState             `json:"state"`
 	Version      int64                       `json:"version"`
 	VesselID     *string                     `json:"vessel_id"`
+	CleaningID   *string                     `json:"cleaning_id"`
 	Observations []domain.GravityObservation `json:"observations"`
 	Metrics      *domain.RunMetrics          `json:"metrics"`
+}
+
+type runDetailView struct {
+	runView
+	Cleaning *cleaningView `json:"cleaning"`
 }
 
 type pairView struct {
